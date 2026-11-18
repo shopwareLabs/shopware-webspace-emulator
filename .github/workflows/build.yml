@@ -17,6 +17,13 @@ on:
 
 jobs:
   build:
+    strategy:
+      matrix:
+        include:
+          - target: single-user
+            flavor: latest=auto
+          - target: http-user
+            flavor: suffix=-http-user,onlatest=true
     uses: docker/github-builder/.github/workflows/build.yml@v1
     permissions:
       contents: read # to fetch the repository content
@@ -24,12 +31,14 @@ jobs:
       packages: write # to push to ghcr.io
     with:
       output: image
+      target: ${{ matrix.target }}
       push: ${{ github.event_name != 'pull_request' }}
       platforms: linux/amd64,linux/arm64
       cache: true
       sbom: true
       set-meta-labels: true
       meta-images: ghcr.io/shopwarelabs/shopware-webspace-emulator
+      meta-flavor: ${{ matrix.flavor }}
       meta-tags: |
         type=raw,value=latest,enable={{is_default_branch}}
         type=ref,event=pr

@@ -4,7 +4,7 @@
 # and a MariaDB server in one container, supervised by supervisord.
 # See README.md for usage.
 
-FROM debian:trixie-slim
+FROM debian:trixie-slim AS base
 
 COPY --from=composer/composer:2-bin /composer /usr/local/bin/composer
 
@@ -25,8 +25,6 @@ mkdir -p /run/sshd
 rm -f /etc/ssh/ssh_host_*
 
 a2enmod rewrite headers expires
-# Run Apache as the SSH user so deployed files are writable by both, like on a webspace.
-sed -i 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=web/; s/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=web/' /etc/apache2/envvars
 
 php_version=$(php -r 'echo PHP_MAJOR_VERSION.".".PHP_MINOR_VERSION;')
 for sapi in apache2 cli; do
@@ -144,3 +142,13 @@ VOLUME ["/var/www/shopware", "/var/lib/mysql"]
 EXPOSE 22 80
 
 ENTRYPOINT ["webspace-entrypoint"]
+
+# Keep Debian's www-data Apache user and provide Deployer's ACL and detection tools.
+FROM base AS http-user
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends acl procps \
+    && rm -rf /var/lib/apt/lists/*
+
+# The default build runs Apache as the SSH user.
+FROM base AS single-user
+RUN sed -i 's/^export APACHE_RUN_USER=.*/export APACHE_RUN_USER=web/; s/^export APACHE_RUN_GROUP=.*/export APACHE_RUN_GROUP=web/' /etc/apache2/envvars

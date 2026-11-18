@@ -1,6 +1,6 @@
 # Shopware Webspace Emulator
 
-A single Docker image that behaves like a classic shared webspace: Apache with mod_php, an SSH login and a MariaDB server. Use it to try out and test SSH-based Shopware deployments, such as the `shopware-cli project deploy` commands, without a real hosting account.
+A Docker image that behaves like a classic shared webspace with Apache, mod_php, an SSH login and a MariaDB server. Use it to test SSH-based Shopware deployments without a real hosting account. Choose the default single-user image or the [two-user variant](#two-user-variant-for-deployer).
 
 > [!WARNING]
 > This image is for local development and testing only. Do not expose it to the internet.
@@ -19,7 +19,7 @@ Based on `debian:trixie-slim`, with all packages from Debian:
 
 [supervisord](http://supervisord.org/) runs sshd, MariaDB and Apache. All logs go to the container output.
 
-The SSH user `web` is also the user Apache and PHP run as. Files deployed over SSH and files written by the shop (cache, media, uploads) have the same owner, like on a shared webspace.
+In the default image, Apache and PHP run as the SSH user `web`. Files deployed over SSH and files written by the shop (cache, media, uploads) have the same owner, like on a shared webspace.
 
 ## Usage
 
@@ -98,18 +98,38 @@ shopware-cli project deploy init -e webspace
 
 When asked for the database, use `mysql://shopware:shopware@127.0.0.1:3306/shopware`. The address is resolved inside the container, and shopware-cli tunnels database connections over SSH automatically.
 
+## Two-user variant for Deployer
+
+Use `ghcr.io/shopwarelabs/shopware-webspace-emulator:latest-http-user` in the run or Compose example. SSH still logs in as `web`, which owns `/var/www/shopware` and manages releases. Apache workers and mod_php run as `www-data`.
+
+Configure the host in your `deploy.php`:
+
+```php
+host('webspace')
+    ->set('hostname', 'localhost')
+    ->set('port', 2222)
+    ->set('remote_user', 'web')
+    ->set('deploy_path', '/var/www/shopware')
+    ->set('http_user', 'www-data')
+    ->set('writable_mode', 'acl')
+    ->set('writable_recursive', true);
+```
+
+The image includes `setfacl` and `getfacl`. Deployer's `deploy:writable` task grants `www-data` access to the paths in your recipe's `writable_dirs`. See the [Deployer writable recipe](https://deployer.org/docs/8.x/recipe/deploy/writable).
+
 ## Building locally
 
 ```bash
 docker build -t shopware-webspace-emulator .
+docker build --target http-user -t shopware-webspace-emulator:latest-http-user .
 ```
 
 ## Image tags
 
 Images are built for `linux/amd64` and `linux/arm64` with [docker/github-builder](https://github.com/docker/github-builder), which signs SLSA provenance and SBOM attestations.
 
-| Tag | Source |
-|-----|--------|
-| `latest` | `main` branch, rebuilt weekly for security updates |
-| `1.2.3`, `1.2` | Git tags `v1.2.3` |
-| `sha-<commit>` | Every pushed commit |
+| Single-user tag | Two-user tag | Source |
+|-----------------|--------------|--------|
+| `latest` | `latest-http-user` | `main` branch, rebuilt weekly for security updates |
+| `1.2.3`, `1.2` | `1.2.3-http-user`, `1.2-http-user` | Git tags `v1.2.3` |
+| `sha-<commit>` | `sha-<commit>-http-user` | Every pushed commit |
